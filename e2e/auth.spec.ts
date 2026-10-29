@@ -39,3 +39,13 @@ test("sign out ends the session", async ({ page }) => {
   await page.goto("/orders");
   await expect(page).toHaveURL(/\/login/);
 });
+
+test("public sign-up is disabled (accounts are invite-only)", async ({ request }) => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const res = await request.post(`${url}/auth/v1/signup`, {
+    headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, "Content-Type": "application/json" },
+    data: { email: `intruder-${Date.now()}@test.local`, password: "Some-Pass-2026!" },
+  });
+  expect(res.status()).toBe(422);
+  expect(await res.text()).toMatch(/signup_disabled|Signups not allowed/i);
+});

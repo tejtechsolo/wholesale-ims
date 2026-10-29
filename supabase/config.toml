@@ -25,5 +25,8 @@ additional_redirect_urls = ["http://localhost:3000"]
 enable_signup = false
 
 [auth.email]
-enable_signup = false
+# NOTE: in the Supabase CLI this flag turns the whole email provider on/off. With it false,
+# GoTrue rejects even password sign-in ("email_provider_disabled", seen in CI). Public
+# sign-up stays off via [auth] enable_signup = false (asserted in e2e/auth.spec.ts).
+enable_signup = true
 enable_confirmations = false
