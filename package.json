@@ -7,7 +7,8 @@
     "test": "vitest run",
     "dev": "next dev",
     "build": "next build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "node tests/smoke/csp.smoke.mjs"
   },
   "keywords": [],
   "author": "",
