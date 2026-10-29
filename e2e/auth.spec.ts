@@ -73,7 +73,7 @@ test("repeated wrong passwords lock that email from this client for a while", as
     }
   };
   for (let i = 0; i < 5; i++)
-    await attempt(`wrong #${i + 1}`, USERS.pending.email, `wrong-${i}`, "Invalid email or password.");
+    await attempt(`wrong #${i + 1}`, USERS.pending.email, `wrong-password-${i}`, "Invalid email or password."); // ≥ 8 chars: minLength blocks shorter ones
   // Even the right password is refused now.
   await attempt("locked", USERS.pending.email, "E2e-Pass-2026!", "Too many failed sign-in attempts. Try again in 15 minutes.");
   // Other accounts from the same client are unaffected.
