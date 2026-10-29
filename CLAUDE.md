@@ -18,7 +18,7 @@ never commit secrets, real customer data or `.env*` (only `.env.example`).
 1. Stage 6: Playwright E2E on `supabase start` (login per role, place → ship, 375px viewport).
 2. Stage 7c: admin invite script (secret key, server-only), MFA for admin/manager,
    auth rate limits/CAPTCHA, invoices/payments.
-3. Run CI on GitHub once and fix anything it finds (workflow never executed yet).
+3. ~~Run CI on GitHub~~ done 2026-10-30: fixed role race + 57P01 crash; CI green 3/3 reruns.
 
 ## Commands
 ```bash
@@ -30,6 +30,13 @@ npm run test:smoke       # BASE_URL=http://localhost:3000, against `next start`
 DB tests create/drop a throwaway database per file. Set `TEST_DATABASE_URL` to a Postgres
 15+ superuser URL (default `postgres://postgres@localhost:54329/postgres`).
 `tests/helpers/auth-shim.sql` emulates Supabase `auth.uid()`; it is NOT a migration.
+
+## CI (GitHub Actions)
+Job logs live on Azure blob storage, which agent sessions can't reach. Failing test output
+is therefore re-emitted as an `::error` annotation. From a session:
+`scripts/ci-wait.sh <sha>` (poll), `scripts/ci-annotations.sh <sha>` (read failures),
+`scripts/pr.sh <branch> <title> <body.md>` (open PR via REST; GraphQL and the GitHub
+connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/merge`.
 
 ## Rules — do not break these
 - **All writes to stock/orders go through SECURITY DEFINER functions** in
@@ -53,6 +60,9 @@ DB tests create/drop a throwaway database per file. Set `TEST_DATABASE_URL` to a
 - Report honestly: only claim "tested" for what was actually run.
 
 ## Gotchas learned
+- Cluster-wide roles must be created once (vitest `globalSetup`), never per test file:
+  parallel `CREATE ROLE` races on a fresh cluster (CI only; local roles pre-existed).
+- Every `pg.Pool` needs an `error` listener; force-dropping a DB kills closing sockets.
 - `pkill -f`/`pgrep -f` in agent shells can match the shell itself; stop servers by port
   (`fuser -k 3000/tcp`).
 - FOR UPDATE can't target the nullable side of a LEFT JOIN; check missing rows first.

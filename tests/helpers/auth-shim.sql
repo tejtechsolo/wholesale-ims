@@ -1,8 +1,16 @@
 -- Minimal emulation of the Supabase auth schema for local DB tests.
 -- In real Supabase these already exist; this file is NOT a migration.
-do $$ begin
-  if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+-- Roles are cluster-wide. tests/helpers/global-setup.ts creates them once before the
+-- parallel test files start; the exception handler keeps this safe if run concurrently.
+do $$
+declare r text;
+begin
+  foreach r in array array['anon', 'authenticated'] loop
+    begin
+      execute format('create role %I nologin', r);
+    exception when duplicate_object or unique_violation then null;
+    end;
+  end loop;
 end $$;
 create schema auth;
 create table auth.users (id uuid primary key, email text unique);
