@@ -50,6 +50,16 @@ export async function createTestDb(): Promise<TestDb> {
   await admin.end();
 
   const pool = new pg.Pool({ connectionString: urlFor(name), max: 25 });
+  // `drop database ... with (force)` in close() terminates any socket still shutting down
+  // (FATAL 57P01). Without a listener pg rethrows it as an uncaught exception (seen in CI).
+  // Ignore only that expected shutdown error, and only once close() has started.
+  let closing = false;
+  const onError = (e: Error & { code?: string }) => {
+    if (closing && e.code === "57P01") return;
+    console.error("[test db] unexpected connection error", e);
+  };
+  pool.on("error", onError);
+  pool.on("connect", (client) => client.on("error", onError));
   const migrations = readdirSync(join(root, "supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
   await pool.query(readFileSync(join(root, "tests/helpers/auth-shim.sql"), "utf8"));
   for (const f of migrations) await pool.query(readFileSync(join(root, "supabase/migrations", f), "utf8"));
@@ -76,6 +86,7 @@ export async function createTestDb(): Promise<TestDb> {
   const one = async <T,>(sql: string, params: unknown[] = []) => (await pool.query(sql, params)).rows[0] as T;
 
   const close = async () => {
+    closing = true;
     await pool.end();
     const a = new pg.Client({ connectionString: ADMIN_URL });
     await a.connect();
