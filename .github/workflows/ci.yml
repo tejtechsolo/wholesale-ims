@@ -34,8 +34,8 @@ jobs:
           npm test 2>&1 | tee test.log
           status=${PIPESTATUS[0]}
           # Always publish the pass/fail counts (logs aren't reachable from agent sessions).
-          summary=$(grep -E "^\s+[0-9]+ (passed|failed|skipped|flaky|did not run)" e2e.log | sed 's/\x1b\[[0-9;]*m//g' | tr -s ' ' | tr '\n' ';')
-          echo "::notice title=playwright summary::${summary:-no summary line found}"
+          summary=$(grep -E "^\s+(Test Files|Tests)\s" test.log | sed 's/\x1b\[[0-9;]*m//g' | tr -s ' ' | tr '\n' ';')
+          echo "::notice title=vitest summary::${summary:-no summary line found}"
           if [ "$status" -ne 0 ]; then
             # Surface the tail as an annotation: readable via the API without log access.
             msg=$(tail -60 test.log | sed 's/\x1b\[[0-9;]*m//g' | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
