@@ -44,10 +44,17 @@ test("invitee follows the email link, sets a password and lands in a warehouse v
   await page.goto(link);
   await expect(page).toHaveURL(/\/account\/password\?welcome=1/);
   await expect(page.getByRole("heading", { name: "Welcome, New Hire" })).toBeVisible();
+  // Too short: the browser blocks submission (minLength) before the server is involved.
   await page.getByLabel("New password").fill("short1");
   await page.getByLabel("Confirm password").fill("short1");
   await page.getByRole("button", { name: "Save password" }).click();
-  await expect(page.locator("form [role=alert]")).toHaveText("Use at least 10 characters");
+  expect(await page.getByLabel("New password").evaluate((el: HTMLInputElement) => el.validity.tooShort)).toBe(true);
+  await expect(page).toHaveURL(/\/account\/password/);
+  // Server-side validation: mismatch is only caught by the server action.
+  await page.getByLabel("New password").fill(firstPassword);
+  await page.getByLabel("Confirm password").fill(firstPassword + "x");
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.locator("form [role=alert]")).toHaveText("Passwords don't match");
   await page.getByLabel("New password").fill(firstPassword);
   await page.getByLabel("Confirm password").fill(firstPassword);
   await page.getByRole("button", { name: "Save password" }).click();

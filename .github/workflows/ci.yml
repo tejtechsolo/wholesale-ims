@@ -90,7 +90,12 @@ jobs:
           summary=$(grep -E "^\s+[0-9]+ (passed|failed|skipped|flaky|did not run)" e2e.log | sed 's/\x1b\[[0-9;]*m//g' | tr -s ' ' | tr '\n' ';')
           echo "::notice title=playwright summary::${summary:-no summary line found}"
           if [ "$status" -ne 0 ]; then
-            msg=$( { grep -E "^\s+(✓|✘|[0-9]+ (passed|failed|skipped|did not run))" e2e.log; echo "-----"; grep -vE "^\s*$" e2e.log | grep -vE "trace|show-trace|attachment|Usage:|─|error-context" | tail -70; } | sed 's/\x1b\[[0-9;]*m//g' | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            # Failure details first (annotations are truncated around 4 KB), then the result list.
+            clean=$(sed 's/\x1b\[[0-9;]*m//g' e2e.log)
+            esc() { sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g'; }
+            errs=$(echo "$clean" | awk '/^  [0-9]+\) /{p=1} /^  [0-9]+ (failed|passed|flaky|did not run)/{p=0} p' | grep -vE "^\s*$|show-trace|attachment|error-context|Usage:" | head -60 | esc)
+            echo "::error title=playwright failures::${errs:-no failure block found}"
+            msg=$(echo "$clean" | grep -E "^\s+(✘|[0-9]+ (passed|failed|skipped|did not run))" | esc)
             echo "::error title=playwright output (tail)::$msg"
           fi
           exit $status
