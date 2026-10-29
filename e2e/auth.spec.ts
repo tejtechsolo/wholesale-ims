@@ -52,19 +52,23 @@ test("public sign-up is disabled (accounts are invite-only)", async ({ request }
 
 test("repeated wrong passwords lock that email from this client for a while", async ({ page }) => {
   // The pending user is only used to prove "no profile = no access", so locking it is harmless.
-  const tryLogin = async (email: string, password: string) => {
+  const attempt = async (label: string, email: string, password: string, expected: string | RegExp) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in" }).click();
+    try {
+      if (expected instanceof RegExp) await expect(page).toHaveURL(expected);
+      else await expect(page.locator("form [role=alert]")).toHaveText(expected);
+    } catch (e) {
+      const body = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 400);
+      throw new Error(`${label}: url=${page.url()} body="${body}"\n${(e as Error).message.split("\n")[0]}`);
+    }
   };
-  for (let i = 0; i < 5; i++) {
-    await tryLogin(USERS.pending.email, `wrong-${i}`);
-    await expect(page.locator("form [role=alert]")).toHaveText("Invalid email or password.");
-  }
-  await tryLogin(USERS.pending.email, "E2e-Pass-2026!"); // even the right password is refused now
-  await expect(page.locator("form [role=alert]")).toHaveText("Too many failed sign-in attempts. Try again in 15 minutes.");
+  for (let i = 0; i < 5; i++)
+    await attempt(`wrong #${i + 1}`, USERS.pending.email, `wrong-${i}`, "Invalid email or password.");
+  // Even the right password is refused now.
+  await attempt("locked", USERS.pending.email, "E2e-Pass-2026!", "Too many failed sign-in attempts. Try again in 15 minutes.");
   // Other accounts from the same client are unaffected.
-  await tryLogin(USERS.buyerA.email, "E2e-Pass-2026!");
-  await expect(page).toHaveURL(/\/orders/);
+  await attempt("other account", USERS.buyerA.email, "E2e-Pass-2026!", /\/orders/);
 });
