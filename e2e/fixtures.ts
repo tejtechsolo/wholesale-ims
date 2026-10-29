@@ -1,4 +1,6 @@
-import { expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { expect, type BrowserContext, type Page } from "@playwright/test";
+import { storageFile } from "./totp";
 
 export const PASSWORD = "E2e-Pass-2026!";
 // Same ids as supabase/seed.test.sql, so profiles/customers line up.
@@ -15,6 +17,15 @@ export type UserKey = keyof typeof USERS;
 
 export async function login(page: Page, who: UserKey) {
   await page.context().clearCookies();
+  if (who === "admin" || who === "manager") {
+    // MFA roles: reuse the aal2 session saved by mfa.setup.ts (each TOTP code is single-use;
+    // the sign-in challenge itself is covered in mfa.spec.ts).
+    const state = JSON.parse(readFileSync(storageFile(who), "utf8")) as { cookies: Parameters<BrowserContext["addCookies"]>[0] };
+    await page.context().addCookies(state.cookies);
+    await page.goto("/orders");
+    await expect(page).toHaveURL(/\/orders/);
+    return;
+  }
   const log: string[] = [];
   const onConsole = (m: { type(): string; text(): string }) => log.push(`console.${m.type()}: ${m.text()}`);
   const onFail = (r: { url(): string; failure(): { errorText: string } | null }) =>

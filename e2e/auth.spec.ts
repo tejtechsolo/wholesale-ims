@@ -5,7 +5,7 @@ test("signed-out users are sent to login and back after signing in", async ({ pa
   const problems = watchProblems(page);
   await page.goto("/inventory");
   await expect(page).toHaveURL(/\/login\?next=%2Finventory/);
-  await page.getByLabel("Email").fill(USERS.manager.email);
+  await page.getByLabel("Email").fill(USERS.warehouse.email); // non-MFA role: MFA has its own spec
   await page.getByLabel("Password").fill("E2e-Pass-2026!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/inventory$/);

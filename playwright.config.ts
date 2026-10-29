@@ -14,8 +14,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile\.spec/ },
-    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 375, height: 812 } }, testMatch: /mobile\.spec/ },
+    // Enrols TOTP for admin + manager once and saves their verified (aal2) sessions.
+    { name: "mfa-setup", use: { ...devices["Desktop Chrome"] }, testMatch: /mfa\.setup\.ts/ },
+    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testIgnore: /mobile\.spec|mfa\.setup/, dependencies: ["mfa-setup"] },
+    { name: "mobile", use: { ...devices["Pixel 7"], viewport: { width: 375, height: 812 } }, testMatch: /mobile\.spec/, dependencies: ["mfa-setup"] },
   ],
   webServer: {
     command: "npx next start -p 3000",
