@@ -34,7 +34,7 @@ jobs:
           npm test 2>&1 | tee test.log
           status=${PIPESTATUS[0]}
           # Always publish the pass/fail counts (logs aren't reachable from agent sessions).
-          summary=$(grep -E "^\s+(Test Files|Tests)\s" test.log | sed 's/\x1b\[[0-9;]*m//g' | tr -s ' ' | tr '\n' ';')
+          summary=$(sed 's/\x1b\[[0-9;]*m//g' test.log | grep -E "^\s+(Test Files|Tests)\s" | tr -s ' ' | tr '\n' ';')
           echo "::notice title=vitest summary::${summary:-no summary line found}"
           if [ "$status" -ne 0 ]; then
             # Surface the tail as an annotation: readable via the API without log access.
@@ -74,6 +74,8 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$pub"
             echo "SUPABASE_SECRET_KEY=$sec"
             echo "SUPABASE_DB_URL=$(get DB_URL)"
+            mail=$(get MAILPIT_URL); [ -n "$mail" ] || mail=$(get INBUCKET_URL)
+            echo "MAILPIT_URL=$mail"
           } >> "$GITHUB_ENV"
           grep -oE "^[A-Z_]+=" supa.env | tr '\n' ' '
       - run: npx playwright install --with-deps chromium
