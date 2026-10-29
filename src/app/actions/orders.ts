@@ -13,6 +13,7 @@ import { toAppError, type Result } from "@/lib/errors";
 async function guard(roles: Role[]) {
   const viewer = await getViewer();
   if (!viewer) return { error: toAppError({ code: "P0001", message: "UNAUTHENTICATED" }) } as const;
+  if (viewer.needsMfa) return { error: toAppError({ code: "P0001", message: "MFA_REQUIRED" }) } as const;
   if (!roles.includes(viewer.role)) return { error: toAppError({ code: "P0001", message: "FORBIDDEN" }) } as const;
   return { viewer } as const;
 }

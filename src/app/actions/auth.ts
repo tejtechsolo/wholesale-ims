@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { clientIp, throttleKeys } from "@/lib/throttle";
+import { MFA_ROLES } from "@/lib/domain";
 
 const schema = z.object({ email: z.email(), password: z.string().min(8).max(128) });
 
@@ -27,15 +28,19 @@ export async function signIn(_prev: { error?: string } | undefined, form: FormDa
   };
 
   if (await throttle("check")) return { error: TOO_MANY };
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword(parsed.data);
   if (error) {
     await throttle("fail");
     // Same message for unknown email / wrong password: no account enumeration.
     return { error: "Invalid email or password." };
   }
   await throttle("success");
-  const next = String(form.get("next") ?? "/orders");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/orders"); // no open redirect
+  const raw = String(form.get("next") ?? "/orders");
+  const next = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/orders"; // no open redirect
+  // Admins and managers must complete MFA before the database grants them anything.
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", signedIn.user.id).maybeSingle();
+  if (profile && MFA_ROLES.includes(profile.role)) redirect(`/account/mfa?next=${encodeURIComponent(next)}`);
+  redirect(next);
 }
 
 export async function signOut() {
