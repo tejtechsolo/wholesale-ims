@@ -15,11 +15,28 @@ export type UserKey = keyof typeof USERS;
 
 export async function login(page: Page, who: UserKey) {
   await page.context().clearCookies();
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(USERS[who].email);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/orders/);
+  const log: string[] = [];
+  const onConsole = (m: { type(): string; text(): string }) => log.push(`console.${m.type()}: ${m.text()}`);
+  const onFail = (r: { url(): string; failure(): { errorText: string } | null }) =>
+    log.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`);
+  const onResp = (r: { url(): string; status(): number; request(): { method(): string } }) => {
+    if (r.request().method() === "POST" || r.status() >= 300) log.push(`response: ${r.request().method()} ${r.status()} ${r.url()}`);
+  };
+  page.on("console", onConsole); page.on("requestfailed", onFail); page.on("response", onResp);
+  try {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(USERS[who].email);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    await expect(page).toHaveURL(/\/orders/);
+  } catch (e) {
+    const alert = await page.getByRole("alert").allInnerTexts().catch(() => []);
+    const cookies = (await page.context().cookies()).map((c) => `${c.name}(secure=${c.secure})`);
+    throw new Error(`login(${who}) failed at ${page.url()}\nalert: ${JSON.stringify(alert)}\n` +
+      `cookies: ${cookies.join(", ") || "none"}\n${log.slice(-15).join("\n")}\n${(e as Error).message.split("\n")[0]}`);
+  } finally {
+    page.off("console", onConsole); page.off("requestfailed", onFail); page.off("response", onResp);
+  }
 }
 
 /** Collects CSP violations and page errors; assert it's empty at the end of a test. */
