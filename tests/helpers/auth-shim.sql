@@ -5,7 +5,7 @@
 do $$
 declare r text;
 begin
-  foreach r in array array['anon', 'authenticated'] loop
+  foreach r in array array['anon', 'authenticated', 'service_role'] loop
     begin
       execute format('create role %I nologin', r);
     exception when duplicate_object or unique_violation then null;
@@ -19,3 +19,9 @@ create function auth.uid() returns uuid language sql stable as $$
 $$;
 grant usage on schema auth to anon, authenticated;
 grant execute on function auth.uid() to anon, authenticated;
+
+-- Mimic Supabase: objects created in `public` are granted to the API roles BY DEFAULT.
+-- Migrations must revoke explicitly; this makes the tests catch a forgotten revoke.
+alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
