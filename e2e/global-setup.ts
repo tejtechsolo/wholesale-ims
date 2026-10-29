@@ -14,10 +14,22 @@ export default async function globalSetup() {
       headers: { apikey: secret, Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
       body: JSON.stringify({ id: u.id, email: u.email, password: PASSWORD, email_confirm: true }),
     });
-    if (!res.ok && res.status !== 422) {  // 422 = already exists (local re-run)
-      throw new Error(`create user ${u.email}: ${res.status} ${await res.text()}`);
+    if (!res.ok) {
+      const body = await res.text();
+      // Only "already exists" (local re-run) is acceptable; anything else must fail loudly.
+      if (!(res.status === 422 && /email_exists|already been registered/i.test(body))) {
+        throw new Error(`create user ${u.email}: ${res.status} ${body}`);
+      }
     }
   }
+  // Prove the credentials work before any spec relies on them.
+  const pub = must("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  const probe = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: pub, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: USERS.buyerA.email, password: PASSWORD }),
+  });
+  if (!probe.ok) throw new Error(`password sign-in probe failed: ${probe.status} ${await probe.text()}`);
   const db = new pg.Client({ connectionString: must("SUPABASE_DB_URL") });
   await db.connect();
   try {

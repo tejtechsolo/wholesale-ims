@@ -30,7 +30,7 @@ export async function login(page: Page, who: UserKey) {
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(/\/orders/);
   } catch (e) {
-    const alert = await page.getByRole("alert").allInnerTexts().catch(() => []);
+    const alert = await page.locator("form [role=alert]").allInnerTexts().catch(() => []);
     const cookies = (await page.context().cookies()).map((c) => `${c.name}(secure=${c.secure})`);
     throw new Error(`login(${who}) failed at ${page.url()}\nalert: ${JSON.stringify(alert)}\n` +
       `cookies: ${cookies.join(", ") || "none"}\n${log.slice(-15).join("\n")}\n${(e as Error).message.split("\n")[0]}`);

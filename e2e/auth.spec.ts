@@ -18,10 +18,10 @@ test("wrong password shows a generic error (no account enumeration)", async ({ p
   await page.getByLabel("Email").fill(USERS.buyerA.email);
   await page.getByLabel("Password").fill("definitely-wrong");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
+  await expect(page.locator("form [role=alert]")).toHaveText("Invalid email or password.");
   await page.getByLabel("Email").fill("nobody@test.local");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
+  await expect(page.locator("form [role=alert]")).toHaveText("Invalid email or password.");
 });
 
 test("a user without a profile cannot get into the app", async ({ page }) => {
