@@ -78,6 +78,9 @@ transition table and the SQL state machine stay identical.
 | Pick / ship / deliver | ✓ | ✓ | ✓ | – | – |
 | Receive stock | ✓ | ✓ | ✓ | – | – |
 | Adjust stock (needs reason) | ✓ | ✓ | – | – | – |
+| Transfer between warehouses | ✓ | ✓ | ✓ | – | – |
+| Set reorder level | ✓ | ✓ | – | – | – |
+| Low-stock report | ✓ | ✓ | ✓ | ✓ | – |
 | Edit products / customers | ✓ | ✓ | – | – | – |
 | Change user roles | ✓ (not self) | – | – | – | – |
 
@@ -95,6 +98,17 @@ Enforced in three places: UI (hide buttons via `nextActions`), Server Action gua
 6. Per line: active product, `≥ min_order_qty`, multiple of `pack_size`, `≤ available`.
 7. Price from `products` (client-supplied prices ignored). Insert order + items, bump
    `reserved`, write `reserve` ledger rows and history. All-or-nothing.
+
+### Transfers and reorder levels (`0004_transfers_reorder.sql`)
+
+- `transfer_stock` moves only **free** stock (`on_hand − reserved`) so open orders keep
+  their units; destination row is created if missing; both rows locked in the same fixed
+  order as `place_order`; two `transfer` ledger rows (−qty / +qty). Inactive destination
+  warehouses are rejected.
+- `set_reorder_level` (manager/admin) — inventory still has no client UPDATE grant.
+- `low_stock_report()` lists active products where **available ≤ reorder_level**
+  (level 0 = alert off), worst shortfall first. Reservations count, so a big order can put
+  a product on the report and cancelling takes it off (tested). Shown on `/inventory`.
 
 ## 6. Order workflow
 
@@ -131,26 +145,33 @@ submitted ──approve──▶ approved ──pick──▶ picking ──ship
 - [x] `EXECUTE` revoked from `public`/`anon`; granted only to `authenticated`.
 - [x] Ledger + status history immutable via triggers (even for the table owner).
 - [x] Server prices, server-side role, idempotent orders, no raw DB errors to clients.
-- [x] Security headers + CSP, `poweredByHeader: false`.
+- [x] Per-request CSP nonce in `proxy.ts` (`script-src 'self' 'nonce-…' 'strict-dynamic'`,
+      no `'unsafe-inline'`); all pages render dynamically so Next stamps the nonce on its
+      scripts. Other headers (HSTS, X-Frame-Options, …) in `next.config.ts`.
 - [ ] To do before production: turn off public sign-ups; MFA for admin/manager; Supabase
-      auth rate limits + CAPTCHA on login; tighten CSP with nonces (drop `'unsafe-inline'`);
-      keep `SUPABASE_SECRET_KEY` only in an admin invite script; PITR backups; run
+      auth rate limits + CAPTCHA on login; keep `SUPABASE_SECRET_KEY` only in an admin invite script; PITR backups; run
       Supabase's Security Advisor.
 
 ## 9. Automated tests — what was actually run
 
-Run on 2026‑10‑29 in this session:
+Last run on 2026‑10‑30 (merged `main`):
 
 | Check | Result |
 |---|---|
-| `vitest run` — 5 files, **59 tests** | **59 passed**, and 10/10 repeated runs green |
+| `vitest run` — 8 files, **77 tests** | **77 passed** (the original 59 also passed 10/10 repeated runs on 2026‑10‑29) |
 | Mutation check: removed `FOR UPDATE` from `place_order` | Oversell test **failed** as intended (the `reserved ≤ on_hand` CHECK blocked overselling but surfaced a raw constraint error) |
 | `tsc --noEmit` | passed |
 | `next build` (dummy Supabase env) | passed — 7 routes + Proxy |
-| `next start` smoke | signed-out `/orders` → 307 to `/login?next=%2Forders`; `/login` 200 with CSP/HSTS/X-Frame headers |
+| `npm run test:smoke` on `next start` | PASS: 12 scripts carry the response's nonce, nonce differs per request, signed-out `/orders` → 307 to `/login` with CSP |
+| Mutation: transfer without row lock / ignoring `reserved` | Transfer race test and free-stock test **failed** as intended |
+| Mutation: fixed (static) nonce | Smoke test **failed** ("nonce reused") as intended |
 
 Test files: `tests/db/stock-validation`, `order-workflow`, `security-rls`, `concurrency`
-(real parallel transactions on 20+ connections), `tests/unit/domain-errors`.
+(real parallel transactions on 20+ connections), `transfers-reorder`; `tests/unit/domain-errors`,
+`stock-schemas`, `csp`; `tests/smoke/csp.smoke.mjs` (needs a running build).
+
+Finding: in Next 16.4 the nonce was still applied after removing the `Content-Security-Policy`
+*request* header in `proxy.ts`. The line is kept because the Next docs require it.
 
 **Honest limits of what was tested**
 - DB tests ran on **local PostgreSQL 16.15** with an emulated `auth.uid()`
@@ -171,7 +192,9 @@ Test files: `tests/db/stock-validation`, `order-workflow`, `security-rls`, `conc
 | 4 | Domain/validation/error mapping (`src/lib`) | Done, unit + parity tests |
 | 5 | Next.js auth, proxy, actions, responsive UI | Written, builds; **not run against Supabase** |
 | 6 | E2E (Playwright) on `supabase start`: login per role, place→ship flow, 375px viewport | **Not started** |
-| 7 | Hardening: invite script, MFA, rate limits, CSP nonces, low-stock alerts, invoices/payments | **Not started** |
+| 7a | Transfers, reorder levels, low-stock report | Done, covered by tests (UI not run against Supabase) |
+| 7b | CSP nonces | Done, unit + smoke tested on a production build |
+| 7c | Invite script, MFA, rate limits, invoices/payments | **Not started** |
 
 ## Running locally
 
