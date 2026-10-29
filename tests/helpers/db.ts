@@ -19,6 +19,8 @@ export const U = {
 } as const;
 export const C = { A: "10000000-0000-4000-8000-00000000000a", B: "10000000-0000-4000-8000-00000000000b" };
 export const WH = "20000000-0000-4000-8000-000000000001";
+export const WH2 = "20000000-0000-4000-8000-000000000002";
+export const WH_CLOSED = "20000000-0000-4000-8000-000000000003";
 export const P = {
   rice: "30000000-0000-4000-8000-000000000001", // ₹1200, MOQ 5, pack 5, 100 on hand
   oil: "30000000-0000-4000-8000-000000000002",  // ₹2100, MOQ 1, pack 1, 10 on hand
@@ -94,9 +96,9 @@ export const placeOrder = (db: TestDb, uid: string, customer: string, lines: str
 export const transition = (db: TestDb, uid: string, orderId: string, to: string) =>
   db.as(uid, "select public.transition_order($1, $2::public.order_status)", [orderId, to]);
 
-export const stock = (db: TestDb, product: string) =>
+export const stock = (db: TestDb, product: string, warehouse = WH) =>
   db.one<{ on_hand: number; reserved: number }>(
-    "select on_hand, reserved from public.inventory where product_id = $1 and warehouse_id = $2", [product, WH]);
+    "select on_hand, reserved from public.inventory where product_id = $1 and warehouse_id = $2", [product, warehouse]);
 
 /** Asserts a promise rejects with our P0001 error code. */
 export async function expectDbError(p: Promise<unknown>, code: string) {
