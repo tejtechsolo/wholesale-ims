@@ -6,7 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getViewer } from "@/lib/auth";
 import { ORDER_STATUSES, adjustStockSchema, placeOrderSchema, receiveStockSchema,
-         reorderLevelSchema, transferStockSchema,
+         reorderLevelSchema, transferStockSchema, recordPaymentSchema,
          type OrderStatus, type Role } from "@/lib/domain";
 import { toAppError, type Result } from "@/lib/errors";
 
@@ -124,4 +124,19 @@ export async function setReorderLevelAction(input: unknown): Promise<Result<null
   if (error) return fail(error);
   revalidatePath("/inventory");
   return { ok: true, data: null };
+}
+
+export async function recordPaymentAction(input: unknown): Promise<Result<{ paymentId: string }>> {
+  const g = await guard(["manager", "admin"]);
+  if ("error" in g) return { ok: false, error: g.error! };
+  const parsed = recordPaymentSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("record_payment", {
+    p_customer_id: parsed.data.customer_id, p_amount: parsed.data.amount, p_method: parsed.data.method,
+    p_reference: parsed.data.reference ?? null, p_idempotency_key: parsed.data.idempotency_key,
+  });
+  if (error) return fail(error);
+  revalidatePath("/invoices");
+  return { ok: true, data: { paymentId: data as string } };
 }
