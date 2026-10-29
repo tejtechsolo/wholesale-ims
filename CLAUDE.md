@@ -51,6 +51,9 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
 - `src/lib/domain.ts` TRANSITIONS must match `public.transition_allowed()` (parity test).
 - Ledger + status history are append-only (triggers). Prices always from `products`.
 - Never edit an applied migration; add `000N_*.sql`.
+- Supabase auto-grants new `public` tables/functions to `anon`/`authenticated`. Every
+  migration must revoke explicitly and grant the minimum; `tests/db/privilege-audit.test.ts`
+  snapshots all API-role privileges and fails on any change (update it deliberately).
 
 ## Workflow
 - Branch `feat/<topic>` from `main` → tests + typecheck + build (+ smoke if UI/proxy) →
