@@ -70,7 +70,7 @@ test("a used invite link cannot be replayed", async ({ page }) => {
   await page.context().clearCookies();
   await page.goto(link);
   await expect(page).toHaveURL(/\/login\?error=expired_link/);
-  await expect(page.getByRole("alert")).toContainText("expired or was already used");
+  await expect(page.locator("main [role=alert]")).toContainText("expired or was already used");
 });
 
 test("admin disables the user (access ends), then re-enables", async ({ page, browser }) => {
