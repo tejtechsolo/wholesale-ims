@@ -1,17 +1,39 @@
 "use server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { clientIp, throttleKeys } from "@/lib/throttle";
 
 const schema = z.object({ email: z.email(), password: z.string().min(8).max(128) });
+
+const TOO_MANY = "Too many failed sign-in attempts. Try again in 15 minutes.";
 
 export async function signIn(_prev: { error?: string } | undefined, form: FormData) {
   const parsed = schema.safeParse({ email: form.get("email"), password: form.get("password") });
   if (!parsed.success) return { error: "Enter a valid email and password." };
   const supabase = await createClient();
+
+  // Throttle failures per (client IP, email) and per client IP. Fails OPEN (logged) if the
+  // pepper is missing or the check errors, so an outage never locks everyone out.
+  const secret = process.env.LOGIN_THROTTLE_SECRET;
+  if (!secret) console.error("[auth] LOGIN_THROTTLE_SECRET is not set: sign-in throttling is OFF");
+  const keys = secret ? throttleKeys(parsed.data.email, clientIp(await headers()), secret) : null;
+  const throttle = async (event: "check" | "fail" | "success") => {
+    if (!keys) return false;
+    const { data, error } = await supabase.rpc("login_throttle", { p_pair: keys.pair, p_ip: keys.ip, p_event: event });
+    if (error) console.error("[auth] login_throttle failed", error.code);
+    return data === true;
+  };
+
+  if (await throttle("check")) return { error: TOO_MANY };
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  // Same message for unknown email / wrong password: no account enumeration.
-  if (error) return { error: "Invalid email or password." };
+  if (error) {
+    await throttle("fail");
+    // Same message for unknown email / wrong password: no account enumeration.
+    return { error: "Invalid email or password." };
+  }
+  await throttle("success");
   const next = String(form.get("next") ?? "/orders");
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/orders"); // no open redirect
 }

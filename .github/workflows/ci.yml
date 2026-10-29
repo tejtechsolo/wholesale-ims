@@ -74,6 +74,7 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$pub"
             echo "SUPABASE_SECRET_KEY=$sec"
             echo "SUPABASE_DB_URL=$(get DB_URL)"
+            echo "LOGIN_THROTTLE_SECRET=$(openssl rand -hex 32)"
             mail=$(get MAILPIT_URL); [ -n "$mail" ] || mail=$(get INBUCKET_URL)
             echo "MAILPIT_URL=$mail"
           } >> "$GITHUB_ENV"
