@@ -2,6 +2,11 @@
 
 Newest first. One entry per decision: date, decision, why, consequence. Append; don't rewrite.
 
+## 2026-10-30 — E2E only in CI, against a real local Supabase stack
+Agent sessions have no Docker, so `supabase start` + Playwright run in the CI `e2e` job
+(DB, Auth, PostgREST, gateway; other services excluded). retries = 0: flaky = bug. CI
+publishes pass/fail counts as annotations because job logs are unreachable from sessions.
+
 ## 2026-10-30 — Project memory kept in the repo
 `CLAUDE.md` (state, rules, next steps) + this log. Any session or developer reads the same
 context; it is versioned and reviewed with the code it describes.

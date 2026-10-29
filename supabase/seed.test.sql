@@ -6,7 +6,8 @@ insert into auth.users (id, email) values
   ('00000000-0000-4000-8000-000000000004', 'sales@test.local'),
   ('00000000-0000-4000-8000-00000000000a', 'buyer-a@test.local'),
   ('00000000-0000-4000-8000-00000000000b', 'buyer-b@test.local'),
-  ('00000000-0000-4000-8000-0000000000ff', 'pending@test.local');
+  ('00000000-0000-4000-8000-0000000000ff', 'pending@test.local')
+on conflict (id) do nothing;  -- E2E creates these through the Auth admin API first
 
 insert into public.customers (id, name, gstin, credit_limit) values
   ('10000000-0000-4000-8000-00000000000a', 'Jaipur Kirana Traders', '08ABCDE1234F1Z5', 100000),
