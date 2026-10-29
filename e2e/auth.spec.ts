@@ -53,16 +53,23 @@ test("public sign-up is disabled (accounts are invite-only)", async ({ request }
 test("repeated wrong passwords lock that email from this client for a while", async ({ page }) => {
   // The pending user is only used to prove "no profile = no access", so locking it is harmless.
   const attempt = async (label: string, email: string, password: string, expected: string | RegExp) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200)); });
     await page.goto("/login");
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
+    const post = page.waitForResponse((r) => r.request().method() === "POST", { timeout: 10_000 }).catch(() => null);
     await page.getByRole("button", { name: "Sign in" }).click();
+    const res = await post;
+    const postInfo = res
+      ? `POST ${res.status()} type=${res.request().resourceType()} action=${res.request().headers()["next-action"] ? "yes" : "no"}`
+      : "no POST seen";
     try {
       if (expected instanceof RegExp) await expect(page).toHaveURL(expected);
       else await expect(page.locator("form [role=alert]")).toHaveText(expected);
     } catch (e) {
       const body = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 400);
-      throw new Error(`${label}: url=${page.url()} body="${body}"\n${(e as Error).message.split("\n")[0]}`);
+      throw new Error(`${label}: url=${page.url()} ${postInfo} console=${JSON.stringify(consoleErrors)} body="${body}"\n${(e as Error).message.split("\n")[0]}`);
     }
   };
   for (let i = 0; i < 5; i++)
