@@ -2,6 +2,13 @@
 
 Newest first. One entry per decision: date, decision, why, consequence. Append; don't rewrite.
 
+## 2026-10-30 — Invoice at shipping, payments settle oldest invoices first
+Invoice is issued by a trigger when an order becomes `shipped` (amount = order total, due =
+ship date in IST + `payment_terms_days`). `record_payment` locks the customer row, then open
+invoices by id, and allocates FIFO by due date. A payment may not exceed the open invoice
+balance (no advances/unallocated credit yet). Payments reduce `outstanding`, freeing credit.
+Not modelled yet: GST/tax lines, credit notes, refunds.
+
 ## 2026-10-30 — E2E only in CI, against a real local Supabase stack
 Agent sessions have no Docker, so `supabase start` + Playwright run in the CI `e2e` job
 (DB, Auth, PostgREST, gateway; other services excluded). retries = 0: flaky = bug. CI
