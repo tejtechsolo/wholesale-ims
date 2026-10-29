@@ -58,7 +58,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 2.122.0 }  # pinned: "latest" queries the GitHub API and can hit its rate limit
       - name: Start Supabase (DB, Auth, PostgREST, gateway only)
         run: supabase start -x studio,imgproxy,realtime,storage-api,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Export Supabase env

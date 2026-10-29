@@ -76,6 +76,8 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
 - Report honestly: only claim "tested" for what was actually run.
 
 ## Gotchas learned
+- CI pins the Supabase CLI version (`version: latest` failed on a GitHub API rate limit).
+  Bump it deliberately in `.github/workflows/ci.yml`.
 - E2E: admin/manager enrol TOTP once in `e2e/mfa.setup.ts`; `login()` reuses their saved
   aal2 cookies. Never reuse a TOTP code (`freshCode` waits for an unused window).
 - Supabase CLI: `[auth.email] enable_signup = false` disables the whole email provider
