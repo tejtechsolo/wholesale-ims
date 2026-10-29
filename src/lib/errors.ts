@@ -5,7 +5,8 @@ export type AppErrorCode =
   | "UNAUTHENTICATED" | "FORBIDDEN" | "VALIDATION" | "INSUFFICIENT_STOCK"
   | "BELOW_MIN_ORDER_QTY" | "NOT_PACK_MULTIPLE" | "PRODUCT_INACTIVE" | "PRODUCT_NOT_FOUND"
   | "CUSTOMER_INACTIVE" | "ORDER_NOT_FOUND" | "INVALID_TRANSITION" | "CREDIT_LIMIT_EXCEEDED"
-  | "INVENTORY_NOT_FOUND" | "ADJUST_BELOW_RESERVED" | "CONFLICT" | "INTERNAL";
+  | "INVENTORY_NOT_FOUND" | "ADJUST_BELOW_RESERVED" | "CUSTOMER_NOT_FOUND" | "PAYMENT_EXCEEDS_DUE"
+  | "CONFLICT" | "INTERNAL";
 
 export interface AppError {
   code: AppErrorCode;
@@ -38,6 +39,11 @@ const KNOWN: Record<Exclude<AppErrorCode, "INTERNAL">, { status: number; msg: (d
   ADJUST_BELOW_RESERVED: {
     status: 409,
     msg: (d) => `Stock can't go below the ${d?.reserved} units reserved for open orders.`,
+  },
+  CUSTOMER_NOT_FOUND: { status: 404, msg: () => "Customer not found." },
+  PAYMENT_EXCEEDS_DUE: {
+    status: 409,
+    msg: (d) => `Payment is more than the amount due (₹${Number(d?.due ?? 0).toLocaleString("en-IN")}).`,
   },
   CONFLICT: { status: 409, msg: () => "This record was changed by someone else. Refresh and retry." },
 };

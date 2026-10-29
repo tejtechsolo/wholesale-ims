@@ -88,3 +88,15 @@ export const reorderLevelSchema = z.object({
   warehouse_id: z.uuid(),
   level: z.coerce.number().int().min(0).max(1_000_000),
 });
+
+export const PAYMENT_METHODS = ["cash", "bank_transfer", "upi", "cheque"] as const;
+
+export const recordPaymentSchema = z.object({
+  customer_id: z.uuid(),
+  idempotency_key: z.uuid(),
+  method: z.enum(PAYMENT_METHODS),
+  reference: z.string().trim().max(100).optional(),
+  // Rupees with at most 2 decimals; kept as a string so no float rounding reaches the DB.
+  amount: z.string().trim().regex(/^\d{1,12}(\.\d{1,2})?$/, "Enter an amount like 1500 or 1500.50")
+    .refine((v) => Number(v) > 0, "Amount must be more than zero"),
+});

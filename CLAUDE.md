@@ -10,15 +10,16 @@ not middleware) + Supabase (Postgres, Auth, RLS). Owner: tejtechsolo. Repo is **
 never commit secrets, real customer data or `.env*` (only `.env.example`).
 
 ## Current state (update on every merge)
-- `main` @ stages 1–5, 7a (transfers / reorder / low-stock), 7b (CSP nonce).
-- Last verified 2026-10-30: 77/77 tests, `tsc` clean, `next build` OK, CSP smoke PASS.
+- `main` @ stages 1–5, 6 (E2E), 7a (transfers / reorder / low-stock), 7b (CSP nonce),
+  7c-1 (invoices issued at ship, payments with FIFO allocation, payment terms).
+- Last verified 2026-10-30: 105/105 vitest, `tsc` clean, `next build` OK, CSP smoke PASS.
 - Stage 6 E2E: Playwright (16 tests) against `supabase start` + production build runs in CI
   (`e2e` job); first green run 2026-10-30 (16 passed). Never run against a hosted project.
 
 ## Next up (in order)
 1. ~~Stage 6 E2E~~ done 2026-10-30 (`e2e/`, CI job `e2e`).
-2. Stage 7c: admin invite script (secret key, server-only), MFA for admin/manager,
-   auth rate limits/CAPTCHA, invoices/payments.
+2. Stage 7c: admin invite script (secret key, server-only), admin UI for users/products/
+   customers, MFA for admin/manager, auth rate limits/CAPTCHA. GST/tax lines not modelled.
 3. ~~Run CI on GitHub~~ done 2026-10-30: fixed role race + 57P01 crash; CI green 3/3 reruns.
 
 ## Commands
@@ -51,7 +52,8 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
   `src/lib/errors.ts`.
 - Role comes from `public.profiles`, never `user_metadata`. Server auth uses `getClaims()`.
 - `src/lib/domain.ts` TRANSITIONS must match `public.transition_allowed()` (parity test).
-- Ledger + status history are append-only (triggers). Prices always from `products`.
+- Ledger, status history, payments and allocations are append-only (triggers). Prices
+  always from `products`. Invoices are only written by the ship trigger and record_payment().
 - Never edit an applied migration; add `000N_*.sql`.
 - Supabase auto-grants new `public` tables/functions to `anon`/`authenticated`. Every
   migration must revoke explicitly and grant the minimum; `tests/db/privilege-audit.test.ts`

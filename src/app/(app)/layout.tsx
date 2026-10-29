@@ -7,6 +7,7 @@ const NAV: { href: string; label: string; roles: Role[] }[] = [
   { href: "/catalog", label: "Catalog", roles: ["customer", "sales", "manager", "admin"] },
   { href: "/orders", label: "Orders", roles: ["customer", "sales", "warehouse", "manager", "admin"] },
   { href: "/inventory", label: "Inventory", roles: ["warehouse", "manager", "admin", "sales"] },
+  { href: "/invoices", label: "Invoices", roles: ["customer", "sales", "manager", "admin"] },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
