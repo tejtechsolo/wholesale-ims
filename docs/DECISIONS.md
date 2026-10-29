@@ -2,6 +2,18 @@
 
 Newest first. One entry per decision: date, decision, why, consequence. Append; don't rewrite.
 
+## 2026-10-30 — MFA enforced in the database for admin/manager
+Redefining `current_app_role()` (one function behind every policy and business function)
+makes an aal1 admin/manager session worthless even if an app check is missed. MFA is only
+offered to roles that require it: other roles are never challenged at sign-in, so an
+optional factor would only look secure. No self-service recovery yet.
+
+## 2026-10-30 — App-level sign-in throttling
+Sign-in runs on the Next server, so Supabase Auth sees one IP for all users. Failures are
+counted per HMAC(client IP + email) and per HMAC(IP) with a server-only pepper; success
+clears the pair. Fails open (logged) if the pepper or the check is unavailable, choosing
+availability over lockout. Depends on a proxy that sets X-Forwarded-For reliably.
+
 ## 2026-10-30 — Accounts via invite script; links verified server-side
 `scripts/invite-user.mjs` (secret key, trusted machine only) creates the auth user and the
 profile, rolling back the user if the profile fails. Invite/reset emails link to

@@ -33,6 +33,13 @@ enable_confirmations = false
 # Local/CI only: E2E sends an invite and then a reset to the same address within seconds.
 max_frequency = "1s"
 
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
 [auth.rate_limit]
 # Local/CI only (hosted default is much lower; keep it low in production).
 email_sent = 100

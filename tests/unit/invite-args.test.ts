@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseInviteArgs } from "../../scripts/invite-args.mjs";
+import { parseInviteArgs, parseResetArgs } from "../../scripts/invite-args.mjs";
 
 const env = { NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co", SUPABASE_SECRET_KEY: "s", SITE_URL: "https://app.example" };
 const local = { ...env, NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321" };
@@ -33,5 +33,16 @@ describe("parseInviteArgs", () => {
     const argv = ["--email", "a@b.co", "--role", "sales", "--name", "Al"];
     expect(() => parseInviteArgs(argv, { ...env, SUPABASE_SECRET_KEY: "" })).toThrow(/SUPABASE_SECRET_KEY/);
     expect(() => parseInviteArgs(argv, { ...env, SITE_URL: undefined })).toThrow(/SITE_URL/);
+  });
+});
+
+describe("parseResetArgs", () => {
+  it("accepts exactly --email and normalises it", () => {
+    expect(parseResetArgs(["--email", " Boss@Shop.IN "], env)).toEqual({ email: "boss@shop.in" });
+  });
+  it.each([[[]], [["--email"]], [["--email", "a@b.co", "--force", "x"]], [["--user", "a@b.co"]], [["--email", "nope"]]])(
+    "rejects %j", (argv) => { expect(() => parseResetArgs(argv, env)).toThrow(); });
+  it("needs the secret key", () => {
+    expect(() => parseResetArgs(["--email", "a@b.co"], { ...env, SUPABASE_SECRET_KEY: "" })).toThrow(/SUPABASE_SECRET_KEY/);
   });
 });

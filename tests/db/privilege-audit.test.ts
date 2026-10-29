@@ -12,12 +12,15 @@ afterAll(async () => { await db?.close(); });
 const EXPECTED = [
   "COL authenticated customers INSERT (credit_limit,gstin,name,payment_terms_days)",
   "COL authenticated customers UPDATE (active,credit_limit,gstin,name,payment_terms_days)",
+  // anon: ONLY the sign-in throttle (no session exists yet at sign-in). Nothing else, ever.
+  "FUNC anon login_throttle",
   "FUNC authenticated adjust_stock",
   "FUNC authenticated admin_list_users",
   "FUNC authenticated catalog_availability",
   "FUNC authenticated current_app_role",
   "FUNC authenticated current_customer_id",
   "FUNC authenticated has_role",
+  "FUNC authenticated login_throttle",
   "FUNC authenticated low_stock_report",
   "FUNC authenticated place_order",
   "FUNC authenticated receive_stock",
@@ -69,7 +72,7 @@ const AUDIT = `
   order by 1`;
 
 describe("privilege audit", () => {
-  it("API roles hold exactly the reviewed privileges (anon: none)", async () => {
+  it("API roles hold exactly the reviewed privileges (anon: login_throttle only)", async () => {
     const actual = (await db.pool.query(AUDIT)).rows.map((r) => r.g);
     expect(actual).toEqual(EXPECTED);
   });

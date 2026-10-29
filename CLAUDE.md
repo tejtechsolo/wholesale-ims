@@ -10,19 +10,18 @@ not middleware) + Supabase (Postgres, Auth, RLS). Owner: tejtechsolo. Repo is **
 never commit secrets, real customer data or `.env*` (only `.env.example`).
 
 ## Current state (update on every merge)
-- `main` @ stages 1–5, 6 (E2E), 7a (transfers / reorder / low-stock), 7b (CSP nonce),
-  7c-1 (invoices issued at ship, payments with FIFO allocation, payment terms),
-  7c-2 (invite script, invite/reset password flow, admin console: products, customers,
-  warehouses, users; receive stock for new products).
-- Last verified 2026-10-30: 105/105 vitest, `tsc` clean, `next build` OK, CSP smoke PASS.
-- Stage 6 E2E: Playwright (16 tests) against `supabase start` + production build runs in CI
-  (`e2e` job); first green run 2026-10-30 (16 passed). Never run against a hosted project.
+- `main` @ stages 1–6 + 7a (transfers / reorder / low-stock), 7b (CSP nonce), 7c-1 (invoices,
+  payments, terms), 7c-2 (invite flow, password reset, admin console), 7c-3 (sign-in
+  throttling, mandatory TOTP MFA for admin/manager).
+- Last verified 2026-10-30 (PR #7): 157/157 vitest, 39/39 Playwright E2E in CI, `tsc`, build.
+- E2E (Playwright, CI job `e2e`) runs against `supabase start` + a production build.
+  Never run against a hosted Supabase project.
 
 ## Next up (in order)
-1. ~~Stage 6 E2E~~ done 2026-10-30 (`e2e/`, CI job `e2e`).
-2. Stage 7c-3: MFA (TOTP) for admin/manager, login throttling / CAPTCHA.
-3. Not modelled: GST/tax lines, credit notes, refunds, advance payments.
-4. ~~Run CI on GitHub~~ done 2026-10-30: fixed role race + 57P01 crash; CI green 3/3 reruns.
+1. Hosted rollout checklist (docs/ARCHITECTURE.md §11): email templates in the dashboard,
+   `LOGIN_THROTTLE_SECRET`, trusted X-Forwarded-For, first admin via invite script + MFA.
+2. Not modelled: GST/tax lines, credit notes, refunds, advance payments, MFA recovery
+   (an admin must reset a lost factor with the secret key — no script yet).
 
 ## Commands
 ```bash
@@ -54,6 +53,10 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
   `public.has_role()`, fail with `public.fail('CODE', jsonb)`. New codes must be added to
   `src/lib/errors.ts`.
 - Role comes from `public.profiles`, never `user_metadata`. Server auth uses `getClaims()`.
+- MFA: `current_app_role()` is NULL for admin/manager below `aal2` (0008). Pages use
+  `requireRole` (enforces MFA); only the (app) layout, `/account/password` and `/account/mfa`
+  use `requireSession`. Don't add another `requireSession` page without a reason.
+- `anon` may execute ONLY `login_throttle` (no session exists at sign-in). Nothing else.
 - The secret key is used ONLY by `scripts/` (invite). Web app code never imports it.
 - Auth emails must link to `/auth/confirm?token_hash=…&type=…` (supabase/templates); hosted
   projects need the same templates pasted in the dashboard, or invites/resets won't work.
@@ -73,6 +76,13 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
 - Report honestly: only claim "tested" for what was actually run.
 
 ## Gotchas learned
+- E2E: inputs have `minLength` (password 8/10, MFA code pattern). A shorter value is never
+  submitted, so "expect an error alert" waits forever. Diagnose with the POST/URL dump
+  pattern in `e2e/auth.spec.ts` before guessing (happened twice).
+- CI pins the Supabase CLI version (`version: latest` failed on a GitHub API rate limit).
+  Bump it deliberately in `.github/workflows/ci.yml`.
+- E2E: admin/manager enrol TOTP once in `e2e/mfa.setup.ts`; `login()` reuses their saved
+  aal2 cookies. Never reuse a TOTP code (`freshCode` waits for an unused window).
 - Supabase CLI: `[auth.email] enable_signup = false` disables the whole email provider
   (password sign-in → 422 email_provider_disabled). Block sign-up with `[auth] enable_signup`.
 - Cluster-wide roles must be created once (vitest `globalSetup`), never per test file:

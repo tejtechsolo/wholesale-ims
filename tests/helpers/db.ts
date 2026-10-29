@@ -37,7 +37,7 @@ function urlFor(db: string) {
 export interface TestDb {
   name: string;
   pool: pg.Pool;                     // superuser connections (setup / assertions)
-  as: <T = any>(uid: string | null, sql: string, params?: unknown[]) => Promise<T[]>;
+  as: <T = any>(uid: string | null, sql: string, params?: unknown[], opts?: { aal?: "aal1" | "aal2" }) => Promise<T[]>;
   one: <T = any>(sql: string, params?: unknown[]) => Promise<T>;
   close: () => Promise<void>;
 }
@@ -66,12 +66,15 @@ export async function createTestDb(): Promise<TestDb> {
   await pool.query(readFileSync(join(root, "supabase/seed.test.sql"), "utf8"));
 
   /** Run one statement exactly as PostgREST would for a signed-in user. */
-  const as = async <T,>(uid: string | null, sql: string, params: unknown[] = []) => {
+  /** Run one statement as PostgREST would. `aal` defaults to aal2 (MFA verified). */
+  const as = async <T,>(uid: string | null, sql: string, params: unknown[] = [], opts: { aal?: "aal1" | "aal2" } = {}) => {
     const c = await pool.connect();
     try {
       await c.query("begin");
       await c.query("set local role authenticated");
       await c.query("select set_config('request.jwt.claim.sub', $1, true)", [uid ?? ""]);
+      const claims = uid ? JSON.stringify({ sub: uid, role: "authenticated", aal: opts.aal ?? "aal2" }) : "";
+      await c.query("select set_config('request.jwt.claims', $1, true)", [claims]);
       const r = await c.query(sql, params);
       await c.query("commit");
       return r.rows as T[];

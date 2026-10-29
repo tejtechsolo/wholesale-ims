@@ -33,10 +33,13 @@ transition table and the SQL state machine stay identical.
 | Domain | Roles, statuses, transitions, zod schemas | `src/lib/domain.ts` |
 | Errors | DB error → safe user message + status | `src/lib/errors.ts` |
 | Actions | Auth guard, validation, RPC call, revalidate | `src/app/actions/*` |
-| UI | Catalog/cart, orders, order detail, inventory | `src/app/(app)/*` |
-| DB | Schema, functions, RLS | `supabase/migrations/000{1,2,3}` |
+| Throttle / CSP | Sign-in throttle keys, CSP builder | `src/lib/throttle.ts`, `src/lib/csp.ts` |
+| UI | Catalog/cart, orders, inventory, invoices, admin console, account (password, MFA) | `src/app/(app)/*` |
+| Auth routes | Email link landing (`verifyOtp`), login, forgot password | `src/app/auth/confirm`, `src/app/login` |
+| DB | Schema, functions, RLS (0001–0008) | `supabase/migrations/` |
+| Scripts | Invite user, reset MFA (secret key; trusted machine only) | `scripts/` |
 
-## 2. Database schema (`0001_schema.sql`)
+## 2. Database schema
 
 | Table | Purpose / key constraints |
 |---|---|
@@ -49,19 +52,35 @@ transition table and the SQL state machine stay identical.
 | `order_items` | Qty > 0, unit_price snapshot from products at order time |
 | `stock_movements` | Append-only ledger: receive / adjust / reserve / release / ship |
 | `order_status_history` | Append-only audit of every transition with actor |
+| `invoices` (0005) | One per shipped order; `amount_paid ≤ amount`; status `open`/`paid` matches balance |
+| `payments`, `payment_allocations` (0005) | Append-only; FIFO allocation to open invoices |
+| `login_failures` (0007) | Opaque HMAC keys → failure count + window; no API access at all |
 
 `available = on_hand − reserved`. Orders **reserve** at placement; `on_hand` drops only at **ship**.
 
 ## 3. Authentication
 
-- Supabase Auth email/password; **invite-only** (disable public sign-ups in the dashboard).
+- Supabase Auth email/password, **invite-only**: public sign-up is off (E2E asserts the
+  signup endpoint refuses). Accounts come from `scripts/invite-user.mjs`, which creates the
+  auth user + profile with the secret key and rolls the user back if the profile fails.
   A user with no `profiles` row has no role → sees nothing, can do nothing (tested).
+- Invite and reset emails link to `/auth/confirm?token_hash=…&type=invite|recovery`
+  (`supabase/templates`). `verifyOtp` runs on the server, sets the session cookie, then the
+  user picks a password at `/account/password`. Links are single-use (E2E: replay rejected).
+- Forgot password answers identically whether or not the account exists.
 - Server code uses `auth.getClaims()` (verifies JWT signature), never `getSession()`.
 - Role is read from `public.profiles`, **never** from `user_metadata` (user-editable).
-- `proxy.ts` is optimistic only; every page calls `requireRole()`, every action calls `guard()`,
-  and the DB checks again. Deactivating a profile revokes access on the next request (tested).
-- Login: uniform error message (no account enumeration), `next` param restricted to
-  same-site paths (no open redirect).
+- **MFA (TOTP) is mandatory for admin and manager.** `current_app_role()` (0008) returns
+  NULL for those roles below `aal2`, so every RLS policy and business function denies them.
+  Login sends them to `/account/mfa` (enrol with QR/secret, or enter a code) and keeps the
+  deep link. Lost authenticator: `scripts/reset-mfa.mjs` removes the factor; they enrol again.
+- **Sign-in throttling** (0007): failures are counted per HMAC(client IP + email) (limit 5)
+  and per HMAC(client IP) (limit 30) in a 15-minute window, with a server-only pepper
+  `LOGIN_THROTTLE_SECRET`; success clears the pair. Needed because sign-in runs on the Next
+  server, so Supabase Auth sees one IP for everyone. Fails open (logged) if unavailable.
+- `proxy.ts` is optimistic only; every page calls `requireRole()` (role + MFA), every action
+  calls `guard()`, and the DB checks again. Deactivating a profile revokes access on the
+  next request (tested). `next` params are restricted to same-site paths (no open redirect).
 
 ## 4. Role-based permissions
 
@@ -81,8 +100,12 @@ transition table and the SQL state machine stay identical.
 | Transfer between warehouses | ✓ | ✓ | ✓ | – | – |
 | Set reorder level | ✓ | ✓ | – | – | – |
 | Low-stock report | ✓ | ✓ | ✓ | ✓ | – |
-| Edit products / customers | ✓ | ✓ | – | – | – |
-| Change user roles | ✓ (not self) | – | – | – | – |
+| See invoices / payments | all | all | – | all | own account |
+| Record payment | ✓ | ✓ | – | – | – |
+| Edit products / customers / payment terms | ✓ | ✓ | – | – | – |
+| Manage warehouses | ✓ | – | – | – | – |
+| Change roles, disable users | ✓ (not self) | – | – | – | – |
+| **MFA required** | **yes** | **yes** | no | no | no |
 
 Enforced in three places: UI (hide buttons via `nextActions`), Server Action guard, Postgres.
 
@@ -138,71 +161,78 @@ submitted ──approve──▶ approved ──pick──▶ picking ──ship
 
 ## 8. Security requirements (checklist)
 
-- [x] RLS enabled on every table; default deny; `anon` gets nothing (tested).
-- [x] No client INSERT/UPDATE/DELETE on inventory/orders/items/ledger (tested for all roles).
-- [x] Column-level grant: `customers.outstanding` writable only by functions (tested).
-- [x] SECURITY DEFINER functions use `set search_path = ''` and schema-qualified names.
-- [x] `EXECUTE` revoked from `public`/`anon`; granted only to `authenticated`.
-- [x] Ledger + status history immutable via triggers (even for the table owner).
-- [x] Server prices, server-side role, idempotent orders, no raw DB errors to clients.
-- [x] Per-request CSP nonce in `proxy.ts` (`script-src 'self' 'nonce-…' 'strict-dynamic'`,
-      no `'unsafe-inline'`); all pages render dynamically so Next stamps the nonce on its
-      scripts. Other headers (HSTS, X-Frame-Options, …) in `next.config.ts`.
-- [ ] To do before production: turn off public sign-ups; MFA for admin/manager; Supabase
-      auth rate limits + CAPTCHA on login; keep `SUPABASE_SECRET_KEY` only in an admin invite script; PITR backups; run
-      Supabase's Security Advisor.
+- [x] RLS enabled on every table; default deny (audited by `privilege-audit.test.ts`).
+- [x] `anon` can execute exactly one function, `login_throttle`; nothing else (snapshot test).
+- [x] No client INSERT/UPDATE/DELETE on inventory/orders/items/ledger/invoices/payments.
+- [x] Column-level grants: `customers.outstanding` writable only by functions (tested).
+- [x] SECURITY DEFINER functions pin `search_path = ''` (tested for every function).
+- [x] Ledger, status history, payments, allocations immutable via triggers.
+- [x] Server prices, server-side role, idempotent orders and payments, no raw DB errors.
+- [x] Per-request CSP nonce, no `'unsafe-inline'` scripts; HSTS, X-Frame-Options, etc.
+- [x] Invite-only accounts; single-use email links verified server-side.
+- [x] Mandatory TOTP MFA for admin/manager, enforced in the database.
+- [x] Sign-in throttling per client IP + email and per IP.
+- [ ] Hosted project: see §11 before going live (templates, pepper, proxy, backups).
+- [ ] Not built: CAPTCHA (Supabase supports hCaptcha/Turnstile via dashboard + a widget),
+      audit log for catalog/customer edits, GST/tax lines, credit notes, refunds.
 
 ## 9. Automated tests — what was actually run
 
-Last run on 2026‑10‑30 (merged `main`):
+Local (agent session, PostgreSQL 16 + auth shim) and CI, 2026‑10‑30 on `feat/auth-hardening` (PR #7):
 
 | Check | Result |
 |---|---|
-| `vitest run` — 8 files, **77 tests** | **77 passed** (the original 59 also passed 10/10 repeated runs on 2026‑10‑29) |
-| Mutation check: removed `FOR UPDATE` from `place_order` | Oversell test **failed** as intended (the `reserved ≤ on_hand` CHECK blocked overselling but surfaced a raw constraint error) |
-| `tsc --noEmit` | passed |
-| `next build` (dummy Supabase env) | passed — 7 routes + Proxy |
-| `npm run test:smoke` on `next start` | PASS: 12 scripts carry the response's nonce, nonce differs per request, signed-out `/orders` → 307 to `/login` with CSP |
-| Mutation: transfer without row lock / ignoring `reserved` | Transfer race test and free-stock test **failed** as intended |
-| Mutation: fixed (static) nonce | Smoke test **failed** ("nonce reused") as intended |
+| `vitest run` — 17 files | **157 passed** locally and in CI (DB, RLS, concurrency, privilege audit, unit) |
+| Playwright E2E (CI, real local Supabase stack) | **39 passed** (desktop + 375px mobile, incl. MFA setup project) |
+| `tsc --noEmit`, `next build` | passed |
+| Mutation checks | Fail as intended when removed: `place_order` row lock, transfer lock / reserved check, payment locks, atomic throttle counter, per-request nonce |
 
-Test files: `tests/db/stock-validation`, `order-workflow`, `security-rls`, `concurrency`
-(real parallel transactions on 20+ connections), `transfers-reorder`; `tests/unit/domain-errors`,
-`stock-schemas`, `csp`; `tests/smoke/csp.smoke.mjs` (needs a running build).
+CI (GitHub Actions): `test` job (vitest + build + CSP smoke) and `e2e` job (Playwright,
+desktop + 375px mobile, against `supabase start` with Mailpit). Pass counts are published as
+`::notice` annotations (`playwright summary`, `vitest summary`) on every run. E2E covers:
+login/redirects, enumeration-safe errors, sign-up disabled, throttling, invite → set password,
+link replay, disable/enable, forgot password, MFA enrolment + challenge + reset, place →
+approve → pick → ship, order-to-cash, admin console, permissions per role, mobile layout.
 
-Finding: in Next 16.4 the nonce was still applied after removing the `Content-Security-Policy`
-*request* header in `proxy.ts`. The line is kept because the Next docs require it.
-
-**Honest limits of what was tested**
-- DB tests ran on **local PostgreSQL 16.15** with an emulated `auth.uid()`
-  (`tests/helpers/auth-shim.sql`), not a real Supabase project. Supabase's PostgREST layer,
-  real JWTs and its Postgres version (15/17) were **not** exercised.
-- The Next.js pages and Server Actions were type-checked and built, but **never run against
-  a live Supabase** — no real sign-in, catalog load or order placement through the UI.
-- No browser/E2E tests, no mobile-viewport visual check, no accessibility audit.
-- `.github/workflows/ci.yml` was written but not executed.
+**Honest limits**
+- Nothing has run against a hosted Supabase project or a real email provider.
+- DB unit tests use an auth shim; E2E uses the real local Supabase stack (Postgres 17).
+- No accessibility audit, load test or visual regression.
 
 ## 10. Reviewable stages
 
 | Stage | Scope | Status |
 |---|---|---|
-| 1 | Schema + constraints (`0001`) | Done, covered by tests |
-| 2 | Stock + order functions (`0002`) | Done, covered by tests |
-| 3 | Grants + RLS (`0003`) | Done, covered by tests |
-| 4 | Domain/validation/error mapping (`src/lib`) | Done, unit + parity tests |
-| 5 | Next.js auth, proxy, actions, responsive UI | Written, builds; **not run against Supabase** |
-| 6 | E2E (Playwright) on `supabase start`: login per role, place→ship flow, 375px viewport | **Not started** |
-| 7a | Transfers, reorder levels, low-stock report | Done, covered by tests (UI not run against Supabase) |
-| 7b | CSP nonces | Done, unit + smoke tested on a production build |
-| 7c | Invite script, MFA, rate limits, invoices/payments | **Not started** |
+| 1–4 | Schema, functions, RLS, domain/validation | Done |
+| 5 | Next.js auth, proxy, actions, responsive UI | Done, E2E-tested |
+| 6 | Playwright E2E on `supabase start` in CI | Done |
+| 7a | Transfers, reorder levels, low-stock report | Done |
+| 7b | CSP nonces | Done |
+| 7c-1 | Invoices at shipping, payments, payment terms | Done, E2E-tested |
+| 7c-2 | Invite flow, password reset, admin console | Done, E2E-tested |
+| 7c-3 | Sign-in throttling, mandatory MFA for admin/manager | Done (PR #7) |
+
+## 11. Hosted rollout checklist
+
+1. Create the project; run migrations (`supabase db push`). Do **not** load `seed.test.sql`.
+2. Auth → Providers: email on, **sign-ups off**. Auth → MFA: TOTP enrol + verify on.
+3. Auth → Email Templates: paste `supabase/templates/invite.html` and `recovery.html`
+   (links must go to `/auth/confirm`); set Site URL to the app URL.
+4. Configure SMTP (the built-in sender is for testing only).
+5. App env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+   `LOGIN_THROTTLE_SECRET` (`openssl rand -hex 32`). Never put the secret key in the app.
+6. Host behind a proxy that sets `X-Forwarded-For` (e.g. Vercel); otherwise throttling sees
+   every client as one IP.
+7. First admin: `scripts/invite-user.mjs --role admin` from a trusted machine; they set a
+   password, then enrol MFA at first sign-in.
+8. Enable PITR/backups; run Supabase's Security Advisor; consider CAPTCHA on sign-in.
 
 ## Running locally
 
 ```bash
 npm install
-# Option A — tests only: any Postgres 15+ superuser URL
+# Unit + DB tests: any Postgres 15+ superuser URL
 TEST_DATABASE_URL=postgres://postgres@localhost:5432/postgres npm test
-# Option B — full app: supabase start; supabase db reset (applies migrations);
-# load supabase/seed.test.sql (minus the auth.users insert — use real invited users),
-# copy .env.example → .env.local, npm run dev
+# Full app + E2E (needs Docker): supabase start; export the env from `supabase status -o env`
+# (see .github/workflows/ci.yml), npm run build, npx playwright test
 ```

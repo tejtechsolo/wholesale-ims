@@ -136,3 +136,6 @@ export const userRoleSchema = z.object({
 }).refine((v) => v.role !== "customer" || !!v.customer_id, {
   message: "Pick the customer account for a buyer", path: ["customer_id"],
 });
+
+/** Roles that must complete MFA (TOTP); mirrors public.current_app_role() in 0008. */
+export const MFA_ROLES: readonly Role[] = ["admin", "manager"];

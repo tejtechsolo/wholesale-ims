@@ -1,8 +1,9 @@
-import { requireRole } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 import { PasswordForm } from "./password-form";
 
 export default async function PasswordPage({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
-  const viewer = await requireRole();
+  // Session only: an invited admin sets a password before enrolling MFA.
+  const viewer = await requireSession();
   const { welcome } = await searchParams;
   return (
     <section className="stack" style={{ maxWidth: 420 }}>

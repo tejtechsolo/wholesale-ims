@@ -58,7 +58,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 2.122.0 }  # pinned: "latest" queries the GitHub API and can hit its rate limit
       - name: Start Supabase (DB, Auth, PostgREST, gateway only)
         run: supabase start -x studio,imgproxy,realtime,storage-api,edge-runtime,logflare,vector,supavisor,postgres-meta
       - name: Export Supabase env
@@ -74,6 +74,7 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$pub"
             echo "SUPABASE_SECRET_KEY=$sec"
             echo "SUPABASE_DB_URL=$(get DB_URL)"
+            echo "LOGIN_THROTTLE_SECRET=$(openssl rand -hex 32)"
             mail=$(get MAILPIT_URL); [ -n "$mail" ] || mail=$(get INBUCKET_URL)
             echo "MAILPIT_URL=$mail"
           } >> "$GITHUB_ENV"

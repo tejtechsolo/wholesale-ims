@@ -30,3 +30,12 @@ export function parseInviteArgs(argv, env = {}) {
   if (a.password === undefined && !env.SITE_URL) throw new Error("env SITE_URL is required for email invites");
   return { email, role: a.role, name, customerId: a.role === "customer" ? a.customer : null, password: a.password ?? null };
 }
+
+/** reset-mfa.mjs: only --email, plus the server env. */
+export function parseResetArgs(argv, env = {}) {
+  if (argv.length !== 2 || argv[0] !== "--email") throw new Error("usage: reset-mfa.mjs --email <address>");
+  const email = argv[1].trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("--email must be a valid email");
+  for (const v of ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"]) if (!env[v]) throw new Error(`env ${v} is required`);
+  return { email };
+}

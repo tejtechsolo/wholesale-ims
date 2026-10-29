@@ -5,7 +5,7 @@ test("signed-out users are sent to login and back after signing in", async ({ pa
   const problems = watchProblems(page);
   await page.goto("/inventory");
   await expect(page).toHaveURL(/\/login\?next=%2Finventory/);
-  await page.getByLabel("Email").fill(USERS.manager.email);
+  await page.getByLabel("Email").fill(USERS.warehouse.email); // non-MFA role: MFA has its own spec
   await page.getByLabel("Password").fill("E2e-Pass-2026!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/inventory$/);
@@ -48,4 +48,34 @@ test("public sign-up is disabled (accounts are invite-only)", async ({ request }
   });
   expect(res.status()).toBe(422);
   expect(await res.text()).toMatch(/signup_disabled|Signups not allowed/i);
+});
+
+test("repeated wrong passwords lock that email from this client for a while", async ({ page }) => {
+  // The pending user is only used to prove "no profile = no access", so locking it is harmless.
+  const attempt = async (label: string, email: string, password: string, expected: string | RegExp) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200)); });
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
+    const post = page.waitForResponse((r) => r.request().method() === "POST", { timeout: 10_000 }).catch(() => null);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    const res = await post;
+    const postInfo = res
+      ? `POST ${res.status()} type=${res.request().resourceType()} action=${res.request().headers()["next-action"] ? "yes" : "no"}`
+      : "no POST seen";
+    try {
+      if (expected instanceof RegExp) await expect(page).toHaveURL(expected);
+      else await expect(page.locator("form [role=alert]")).toHaveText(expected);
+    } catch (e) {
+      const body = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 400);
+      throw new Error(`${label}: url=${page.url()} ${postInfo} console=${JSON.stringify(consoleErrors)} body="${body}"\n${(e as Error).message.split("\n")[0]}`);
+    }
+  };
+  for (let i = 0; i < 5; i++)
+    await attempt(`wrong #${i + 1}`, USERS.pending.email, `wrong-password-${i}`, "Invalid email or password."); // ≥ 8 chars: minLength blocks shorter ones
+  // Even the right password is refused now.
+  await attempt("locked", USERS.pending.email, "E2e-Pass-2026!", "Too many failed sign-in attempts. Try again in 15 minutes.");
+  // Other accounts from the same client are unaffected.
+  await attempt("other account", USERS.buyerA.email, "E2e-Pass-2026!", /\/orders/);
 });
