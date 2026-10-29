@@ -102,7 +102,8 @@ export const recordPaymentSchema = z.object({
 });
 
 // ---- Admin console ----
-const money = z.coerce.number().positive().max(10_000_000).multipleOf(0.01);
+const money = z.coerce.number({ error: "Enter a number" }).positive("Must be more than 0")
+  .max(10_000_000, "Too large").multipleOf(0.01, "At most 2 decimal places");
 
 export const productSchema = z.object({
   sku: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,40}$/, "SKU: 3-40 letters, digits or dashes"),
