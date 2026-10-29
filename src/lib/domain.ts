@@ -100,3 +100,38 @@ export const recordPaymentSchema = z.object({
   amount: z.string().trim().regex(/^\d{1,12}(\.\d{1,2})?$/, "Enter an amount like 1500 or 1500.50")
     .refine((v) => Number(v) > 0, "Amount must be more than zero"),
 });
+
+// ---- Admin console ----
+const money = z.coerce.number().positive().max(10_000_000).multipleOf(0.01);
+
+export const productSchema = z.object({
+  sku: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{3,40}$/, "SKU: 3-40 letters, digits or dashes"),
+  name: z.string().trim().min(2).max(200),
+  unit: z.string().trim().min(1).max(20),
+  unit_price: money,
+  min_order_qty: z.coerce.number().int().min(1).max(1_000_000),
+  pack_size: z.coerce.number().int().min(1).max(1_000_000),
+  active: z.boolean(),
+});
+
+export const customerSchema = z.object({
+  name: z.string().trim().min(2).max(200),
+  gstin: z.string().trim().toUpperCase().regex(/^[0-9]{2}[A-Z0-9]{13}$/, "GSTIN must be 15 characters")
+    .optional().or(z.literal("").transform(() => undefined)),
+  credit_limit: z.coerce.number().min(0).max(1_000_000_000).multipleOf(0.01),
+  payment_terms_days: z.coerce.number().int().min(0).max(365),
+  active: z.boolean(),
+});
+
+export const warehouseSchema = z.object({
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9-]{2,20}$/, "Code: 2-20 letters, digits or dashes"),
+  name: z.string().trim().min(2).max(100),
+});
+
+export const userRoleSchema = z.object({
+  user_id: z.uuid(),
+  role: z.enum(ROLES),
+  customer_id: z.uuid().optional().or(z.literal("").transform(() => undefined)),
+}).refine((v) => v.role !== "customer" || !!v.customer_id, {
+  message: "Pick the customer account for a buyer", path: ["customer_id"],
+});
