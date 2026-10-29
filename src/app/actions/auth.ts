@@ -21,3 +21,32 @@ export async function signOut() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+const resetSchema = z.object({ email: z.email() });
+
+/** Always answers the same way: never reveals whether an account exists. */
+export async function requestPasswordReset(_prev: { done?: boolean; error?: string } | undefined, form: FormData) {
+  const parsed = resetSchema.safeParse({ email: form.get("email") });
+  if (!parsed.success) return { error: "Enter a valid email." };
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email);
+  if (error && error.status !== 400 && error.status !== 404) console.error("[auth] reset failed", error.status);
+  return { done: true };
+}
+
+const passwordSchema = z.object({
+  password: z.string().min(10, "Use at least 10 characters").max(128)
+    .regex(/[a-z]/i, "Include a letter").regex(/\d/, "Include a number"),
+  confirm: z.string(),
+}).refine((v) => v.password === v.confirm, { message: "Passwords don't match", path: ["confirm"] });
+
+export async function setPassword(_prev: { error?: string } | undefined, form: FormData) {
+  const parsed = passwordSchema.safeParse({ password: form.get("password"), confirm: form.get("confirm") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  if (!data?.claims) return { error: "Your link has expired. Ask for a new one." };
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) return { error: error.code === "same_password" ? "Choose a different password." : "Could not save the password. Try again." };
+  redirect("/orders?password=updated");
+}

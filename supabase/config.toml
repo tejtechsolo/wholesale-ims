@@ -30,3 +30,24 @@ enable_signup = false
 # sign-up stays off via [auth] enable_signup = false (asserted in e2e/auth.spec.ts).
 enable_signup = true
 enable_confirmations = false
+# Local/CI only: E2E sends an invite and then a reset to the same address within seconds.
+max_frequency = "1s"
+
+[auth.rate_limit]
+# Local/CI only (hosted default is much lower; keep it low in production).
+email_sent = 100
+
+[inbucket]
+# Local mail catcher (Mailpit); E2E reads invite/reset links from it.
+enabled = true
+port = 54324
+
+# Emails link to /auth/confirm with a token_hash (server-side verifyOtp). Hosted project:
+# paste the same templates under Authentication → Email Templates.
+[auth.email.template.invite]
+subject = "You're invited to Wholesale IMS"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Wholesale IMS password"
+content_path = "./supabase/templates/recovery.html"

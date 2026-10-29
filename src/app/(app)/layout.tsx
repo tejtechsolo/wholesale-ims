@@ -8,6 +8,7 @@ const NAV: { href: string; label: string; roles: Role[] }[] = [
   { href: "/orders", label: "Orders", roles: ["customer", "sales", "warehouse", "manager", "admin"] },
   { href: "/inventory", label: "Inventory", roles: ["warehouse", "manager", "admin", "sales"] },
   { href: "/invoices", label: "Invoices", roles: ["customer", "sales", "manager", "admin"] },
+  { href: "/admin", label: "Admin", roles: ["manager", "admin"] },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </nav>
         <form action={signOut} className="who">
           <span className="muted">{viewer.name} · {viewer.role}</span>
+          <Link href="/account/password" className="muted">Password</Link>
           <button className="ghost">Sign out</button>
         </form>
       </header>

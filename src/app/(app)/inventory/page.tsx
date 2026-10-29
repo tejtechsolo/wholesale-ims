@@ -1,24 +1,28 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { StockForm } from "./stock-form";
+import { ReceiveNew } from "./receive-new";
 
 export default async function InventoryPage() {
   const viewer = await requireRole("warehouse", "manager", "admin", "sales");
   const supabase = await createClient();
-  const [inv, low, wh] = await Promise.all([
+  const [inv, low, wh, prods] = await Promise.all([
     supabase.from("inventory")
       .select("product_id, warehouse_id, on_hand, reserved, reorder_level, products(sku, name), warehouses(code)")
       .order("product_id"),
     supabase.rpc("low_stock_report"),
     supabase.from("warehouses").select("id, code").eq("active", true).order("code"),
+    supabase.from("products").select("id, sku, name").eq("active", true).order("sku"),
   ]);
-  if (inv.error || low.error || wh.error) throw new Error("Could not load inventory");
+  if (inv.error || low.error || wh.error || prods.error) throw new Error("Could not load inventory");
   const canReceive = ["warehouse", "manager", "admin"].includes(viewer.role);
   const canAdjust = ["manager", "admin"].includes(viewer.role);
 
   return (
     <section className="stack">
       <h1>Inventory</h1>
+
+      {canReceive && <ReceiveNew products={prods.data} warehouses={wh.data} />}
 
       {low.data.length > 0 && (
         <div className="card" role="region" aria-label="Low stock">

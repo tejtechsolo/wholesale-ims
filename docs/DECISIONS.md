@@ -2,6 +2,14 @@
 
 Newest first. One entry per decision: date, decision, why, consequence. Append; don't rewrite.
 
+## 2026-10-30 — Accounts via invite script; links verified server-side
+`scripts/invite-user.mjs` (secret key, trusted machine only) creates the auth user and the
+profile, rolling back the user if the profile fails. Invite/reset emails link to
+`/auth/confirm` with a `token_hash`; `verifyOtp` runs on the server, so no tokens sit in URL
+fragments. Reset requests answer identically whether or not the email exists. The admin
+console never holds the secret key: it changes roles/active flags through SECURITY DEFINER
+functions and writes catalog/customer/warehouse rows through RLS.
+
 ## 2026-10-30 — Invoice at shipping, payments settle oldest invoices first
 Invoice is issued by a trigger when an order becomes `shipped` (amount = order total, due =
 ship date in IST + `payment_terms_days`). `record_payment` locks the customer row, then open

@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { buildCsp } from "@/lib/csp";
 
-const PUBLIC = ["/login", "/auth/callback"];
+const PUBLIC = ["/login", "/auth/confirm"]; // /login/forgot is covered by /login
 
 export default async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");

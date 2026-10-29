@@ -36,3 +36,6 @@ tr.low td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
   table.responsive td::before { content: attr(data-label); color: var(--muted); }
   .topbar nav { order:3; width:100%; overflow-x:auto; }
 }
+label.check { display:flex; flex-direction:row; align-items:center; gap:.4rem; }
+label.check input { width:auto; min-height:auto; }
+a.card { text-decoration:none; color:inherit; }
