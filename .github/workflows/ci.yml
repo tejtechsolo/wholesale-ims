@@ -22,3 +22,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: CSP smoke test against the production build
+        run: |
+          npx next start -p 3000 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null localhost:3000/login && break; sleep 1; done
+          BASE_URL=http://localhost:3000 npm run test:smoke
