@@ -13,7 +13,7 @@ never commit secrets, real customer data or `.env*` (only `.env.example`).
 - `main` @ stages 1–6 + 7a (transfers / reorder / low-stock), 7b (CSP nonce), 7c-1 (invoices,
   payments, terms), 7c-2 (invite flow, password reset, admin console), 7c-3 (sign-in
   throttling, mandatory TOTP MFA for admin/manager).
-- Last verified 2026-10-30: 150/150 vitest, `tsc` clean, `next build` OK; E2E in CI.
+- Last verified 2026-10-30 (PR #7): 157/157 vitest, 39/39 Playwright E2E in CI, `tsc`, build.
 - E2E (Playwright, CI job `e2e`) runs against `supabase start` + a production build.
   Never run against a hosted Supabase project.
 
@@ -76,6 +76,9 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
 - Report honestly: only claim "tested" for what was actually run.
 
 ## Gotchas learned
+- E2E: inputs have `minLength` (password 8/10, MFA code pattern). A shorter value is never
+  submitted, so "expect an error alert" waits forever. Diagnose with the POST/URL dump
+  pattern in `e2e/auth.spec.ts` before guessing (happened twice).
 - CI pins the Supabase CLI version (`version: latest` failed on a GitHub API rate limit).
   Bump it deliberately in `.github/workflows/ci.yml`.
 - E2E: admin/manager enrol TOTP once in `e2e/mfa.setup.ts`; `login()` reuses their saved

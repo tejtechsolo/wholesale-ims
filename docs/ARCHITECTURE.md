@@ -178,11 +178,12 @@ submitted ──approve──▶ approved ──pick──▶ picking ──ship
 
 ## 9. Automated tests — what was actually run
 
-Local (agent session, PostgreSQL 16 + auth shim), 2026‑10‑30 on `feat/auth-hardening`:
+Local (agent session, PostgreSQL 16 + auth shim) and CI, 2026‑10‑30 on `feat/auth-hardening` (PR #7):
 
 | Check | Result |
 |---|---|
-| `vitest run` — 17 files | **150 passed** (DB, RLS, concurrency, privilege audit, unit) |
+| `vitest run` — 17 files | **157 passed** locally and in CI (DB, RLS, concurrency, privilege audit, unit) |
+| Playwright E2E (CI, real local Supabase stack) | **39 passed** (desktop + 375px mobile, incl. MFA setup project) |
 | `tsc --noEmit`, `next build` | passed |
 | Mutation checks | Fail as intended when removed: `place_order` row lock, transfer lock / reserved check, payment locks, atomic throttle counter, per-request nonce |
 
