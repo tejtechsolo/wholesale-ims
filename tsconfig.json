@@ -29,12 +29,14 @@
     "allowJs": true
   },
   "include": [
+    ".next/dev/types/**/*.ts",
+    ".next/types/**/*.ts",
+    "e2e/**/*.ts",
     "next-env.d.ts",
+    "playwright.config.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
-    ".next/types/**/*.ts",
-    "tests/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    "tests/**/*.ts"
   ],
   "exclude": [
     "node_modules"

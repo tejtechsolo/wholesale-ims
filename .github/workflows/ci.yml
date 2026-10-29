@@ -45,3 +45,44 @@ jobs:
           npx next start -p 3000 &
           for i in $(seq 1 60); do curl -sf -o /dev/null localhost:3000/login && break; sleep 1; done
           BASE_URL=http://localhost:3000 npm run test:smoke
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Start Supabase (DB, Auth, PostgREST, gateway only)
+        run: supabase start -x studio,imgproxy,realtime,storage-api,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - name: Export Supabase env
+        shell: bash
+        run: |
+          supabase status -o env > supa.env
+          get() { grep -E "^$1=" supa.env | head -1 | cut -d= -f2- | tr -d '"'; }
+          pub=$(get PUBLISHABLE_KEY); [ -n "$pub" ] || pub=$(get ANON_KEY)
+          sec=$(get SECRET_KEY); [ -n "$sec" ] || sec=$(get SERVICE_ROLE_KEY)
+          echo "::add-mask::$sec"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(get API_URL)"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$pub"
+            echo "SUPABASE_SECRET_KEY=$sec"
+            echo "SUPABASE_DB_URL=$(get DB_URL)"
+          } >> "$GITHUB_ENV"
+          grep -oE "^[A-Z_]+=" supa.env | tr '\n' ' '
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Playwright E2E
+        shell: bash
+        run: |
+          set +e
+          npx playwright test 2>&1 | tee e2e.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            msg=$(grep -vE "^\s*$" e2e.log | tail -80 | sed 's/\x1b\[[0-9;]*m//g' | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=playwright output (tail)::$msg"
+          fi
+          exit $status
