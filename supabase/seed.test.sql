@@ -21,7 +21,10 @@ insert into public.profiles (id, full_name, role, customer_id) values
   ('00000000-0000-4000-8000-00000000000b', 'Buyer B',        'customer',  '10000000-0000-4000-8000-00000000000b');
 
 insert into public.warehouses (id, code, name) values
-  ('20000000-0000-4000-8000-000000000001', 'JAI-01', 'Jaipur Main');
+  ('20000000-0000-4000-8000-000000000001', 'JAI-01', 'Jaipur Main'),
+  ('20000000-0000-4000-8000-000000000002', 'AJM-01', 'Ajmer Depot'),
+  ('20000000-0000-4000-8000-000000000003', 'OLD-01', 'Closed Depot');
+update public.warehouses set active = false where code = 'OLD-01';
 
 insert into public.products (id, sku, name, unit, unit_price, min_order_qty, pack_size, active) values
   ('30000000-0000-4000-8000-000000000001', 'RICE-25KG', 'Basmati Rice 25kg', 'bag', 1200, 5, 5, true),

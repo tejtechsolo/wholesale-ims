@@ -72,3 +72,19 @@ export function checkLine(
     return `${product.sku}: only ${product.available} available`;
   return null;
 }
+
+export const transferStockSchema = z.object({
+  product_id: z.uuid(),
+  from_warehouse_id: z.uuid(),
+  to_warehouse_id: z.uuid(),
+  quantity: z.coerce.number().int().positive().max(1_000_000),
+  reason: z.string().trim().max(500).optional(),
+}).refine((v) => v.from_warehouse_id !== v.to_warehouse_id, {
+  message: "Choose a different destination warehouse", path: ["to_warehouse_id"],
+});
+
+export const reorderLevelSchema = z.object({
+  product_id: z.uuid(),
+  warehouse_id: z.uuid(),
+  level: z.coerce.number().int().min(0).max(1_000_000),
+});

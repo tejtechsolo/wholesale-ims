@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getViewer } from "@/lib/auth";
 import { ORDER_STATUSES, adjustStockSchema, placeOrderSchema, receiveStockSchema,
+         reorderLevelSchema, transferStockSchema,
          type OrderStatus, type Role } from "@/lib/domain";
 import { toAppError, type Result } from "@/lib/errors";
 
@@ -93,4 +94,34 @@ export async function adjustStockAction(input: unknown): Promise<Result<{ onHand
   if (error) return fail(error);
   revalidatePath("/inventory");
   return { ok: true, data: { onHand: data as number } };
+}
+
+export async function transferStockAction(input: unknown): Promise<Result<null>> {
+  const g = await guard(["warehouse", "manager", "admin"]);
+  if ("error" in g) return { ok: false, error: g.error! };
+  const parsed = transferStockSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("transfer_stock", {
+    p_product_id: parsed.data.product_id, p_from_warehouse: parsed.data.from_warehouse_id,
+    p_to_warehouse: parsed.data.to_warehouse_id, p_quantity: parsed.data.quantity,
+    p_reason: parsed.data.reason ?? null,
+  });
+  if (error) return fail(error);
+  revalidatePath("/inventory");
+  return { ok: true, data: null };
+}
+
+export async function setReorderLevelAction(input: unknown): Promise<Result<null>> {
+  const g = await guard(["manager", "admin"]);
+  if ("error" in g) return { ok: false, error: g.error! };
+  const parsed = reorderLevelSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_reorder_level", {
+    p_product_id: parsed.data.product_id, p_warehouse_id: parsed.data.warehouse_id, p_level: parsed.data.level,
+  });
+  if (error) return fail(error);
+  revalidatePath("/inventory");
+  return { ok: true, data: null };
 }
