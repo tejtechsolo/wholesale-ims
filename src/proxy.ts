@@ -6,6 +6,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { buildCsp } from "@/lib/csp";
+import { readSupabaseEnv } from "@/lib/env";
 
 const PUBLIC = ["/login", "/auth/confirm"]; // /login/forgot is covered by /login
 
@@ -20,9 +21,27 @@ export default async function proxy(request: NextRequest) {
   const forward = () => NextResponse.next({ request: { headers: requestHeaders } });
 
   let response = forward();
+  const path = request.nextUrl.pathname;
+  const isPublic = PUBLIC.some((p) => path.startsWith(p));
+  const toLogin = () => {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = `?next=${encodeURIComponent(path)}`;
+    return NextResponse.redirect(url);
+  };
+
+  // Not connected to Supabase yet (env missing/placeholder): don't crash every request;
+  // send everyone to /login, which explains the problem.
+  const env = readSupabaseEnv();
+  if (!env) {
+    response = isPublic ? response : toLogin();
+    response.headers.set("Content-Security-Policy", csp);
+    return response;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    env.url,
+    env.key,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
@@ -39,13 +58,7 @@ export default async function proxy(request: NextRequest) {
 
   // getClaims() verifies the JWT signature; never trust getSession() on the server.
   const { data } = await supabase.auth.getClaims();
-  const path = request.nextUrl.pathname;
-  if (!data?.claims && !PUBLIC.some((p) => path.startsWith(p))) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", path);
-    response = NextResponse.redirect(url);
-  }
+  if (!data?.claims && !isPublic) response = toLogin();
 
   response.headers.set("Content-Security-Policy", csp);
   return response;
