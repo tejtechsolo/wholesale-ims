@@ -1,13 +1,16 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { readSupabaseEnv } from "@/lib/env";
 
 /** Per-request Supabase client acting AS the signed-in user (RLS applies). */
 export async function createClient() {
+  const env = readSupabaseEnv();
+  if (!env) throw new Error("Supabase is not configured (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)");
   const cookieStore = await cookies();
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    env.url,
+    env.key,
     {
       cookies: {
         getAll: () => cookieStore.getAll(),

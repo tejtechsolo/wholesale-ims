@@ -2,6 +2,12 @@
 
 Newest first. One entry per decision: date, decision, why, consequence. Append; don't rewrite.
 
+## 2026-10-30 — Distinguish "not configured" / "unavailable" from a wrong password
+First Vercel deploy had no Supabase env; every sign-in said "Invalid email or password". Now
+missing or placeholder env shows a "not connected to its database" banner (no secrets
+revealed) and the proxy no longer depends on Supabase to render /login; network/5xx Auth
+failures say "temporarily unavailable" and aren't counted as failed attempts.
+
 ## 2026-10-30 — MFA enforced in the database for admin/manager
 Redefining `current_app_role()` (one function behind every policy and business function)
 makes an aal1 admin/manager session worthless even if an app check is missed. MFA is only

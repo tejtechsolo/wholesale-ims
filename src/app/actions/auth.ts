@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { clientIp, throttleKeys } from "@/lib/throttle";
 import { MFA_ROLES } from "@/lib/domain";
+import { NOT_CONFIGURED_MESSAGE, classifySignInError, readSupabaseEnv } from "@/lib/env";
 
 const schema = z.object({ email: z.email(), password: z.string().min(8).max(128) });
 
@@ -13,6 +14,10 @@ const TOO_MANY = "Too many failed sign-in attempts. Try again in 15 minutes.";
 export async function signIn(_prev: { error?: string } | undefined, form: FormData) {
   const parsed = schema.safeParse({ email: form.get("email"), password: form.get("password") });
   if (!parsed.success) return { error: "Enter a valid email and password." };
+  if (!readSupabaseEnv()) {
+    console.error("[auth] Supabase env missing or placeholder: sign-in cannot work");
+    return { error: NOT_CONFIGURED_MESSAGE };
+  }
   const supabase = await createClient();
 
   // Throttle failures per (client IP, email) and per client IP. Fails OPEN (logged) if the
@@ -29,16 +34,22 @@ export async function signIn(_prev: { error?: string } | undefined, form: FormDa
 
   if (await throttle("check")) return { error: TOO_MANY };
   const { data: signedIn, error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) {
+  const failure = classifySignInError(error);
+  if (failure === "invalid_credentials") {
     await throttle("fail");
     // Same message for unknown email / wrong password: no account enumeration.
     return { error: "Invalid email or password." };
+  }
+  if (failure) {
+    // Not the user's fault (Auth unreachable, misconfigured, …): don't call it a wrong password.
+    console.error("[auth] sign-in failed", error?.name, error?.status, error?.code);
+    return { error: "Sign-in is temporarily unavailable. Please try again in a few minutes." };
   }
   await throttle("success");
   const raw = String(form.get("next") ?? "/orders");
   const next = raw.startsWith("/") && !raw.startsWith("//") ? raw : "/orders"; // no open redirect
   // Admins and managers must complete MFA before the database grants them anything.
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", signedIn.user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", signedIn.user!.id).maybeSingle();
   if (profile && MFA_ROLES.includes(profile.role)) redirect(`/account/mfa?next=${encodeURIComponent(next)}`);
   redirect(next);
 }
@@ -55,6 +66,7 @@ const resetSchema = z.object({ email: z.email() });
 export async function requestPasswordReset(_prev: { done?: boolean; error?: string } | undefined, form: FormData) {
   const parsed = resetSchema.safeParse({ email: form.get("email") });
   if (!parsed.success) return { error: "Enter a valid email." };
+  if (!readSupabaseEnv()) return { error: NOT_CONFIGURED_MESSAGE };
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email);
   if (error && error.status !== 400 && error.status !== 404) console.error("[auth] reset failed", error.status);
