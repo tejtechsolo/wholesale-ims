@@ -18,8 +18,8 @@ never commit secrets, real customer data or `.env*` (only `.env.example`).
   Never run against a hosted Supabase project.
 
 ## Next up (in order)
-1. Hosted rollout checklist (docs/ARCHITECTURE.md §11): email templates in the dashboard,
-   `LOGIN_THROTTLE_SECRET`, trusted X-Forwarded-For, first admin via invite script + MFA.
+1. Hosted setup: follow `docs/DEPLOY.md` (Vercel deploy exists at wholesale-ims.vercel.app but
+   had no Supabase project/env as of 2026-10-30; the login page now says so).
 2. Not modelled: GST/tax lines, credit notes, refunds, advance payments, MFA recovery
    (an admin must reset a lost factor with the secret key — no script yet).
 
@@ -53,6 +53,9 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
   `public.has_role()`, fail with `public.fail('CODE', jsonb)`. New codes must be added to
   `src/lib/errors.ts`.
 - Role comes from `public.profiles`, never `user_metadata`. Server auth uses `getClaims()`.
+- Read Supabase env only via `readSupabaseEnv()` (src/lib/env.ts): missing/placeholder env must
+  show "not configured", never crash or look like a wrong password. Only `invalid_credentials`
+  may produce "Invalid email or password" (and count toward throttling).
 - MFA: `current_app_role()` is NULL for admin/manager below `aal2` (0008). Pages use
   `requireRole` (enforces MFA); only the (app) layout, `/account/password` and `/account/mfa`
   use `requireSession`. Don't add another `requireSession` page without a reason.
@@ -76,6 +79,8 @@ connector's PR tools are blocked/403). Merge: `gh api -X PUT repos/…/pulls/N/m
 - Report honestly: only claim "tested" for what was actually run.
 
 ## Gotchas learned
+- A sign-in that fails for ANY reason used to say "Invalid email or password" — that hid a
+  deployment with no Supabase env. Check server logs (`[auth] …`) before blaming users.
 - E2E: inputs have `minLength` (password 8/10, MFA code pattern). A shorter value is never
   submitted, so "expect an error alert" waits forever. Diagnose with the POST/URL dump
   pattern in `e2e/auth.spec.ts` before guessing (happened twice).

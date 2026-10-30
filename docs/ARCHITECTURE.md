@@ -214,6 +214,10 @@ approve → pick → ship, order-to-cash, admin console, permissions per role, m
 
 ## 11. Hosted rollout checklist
 
+Step-by-step with dashboard paths: `docs/DEPLOY.md`. Helpers: `supabase/demo-data.sql`,
+`supabase/first-admin.sql`.
+
+
 1. Create the project; run migrations (`supabase db push`). Do **not** load `seed.test.sql`.
 2. Auth → Providers: email on, **sign-ups off**. Auth → MFA: TOTP enrol + verify on.
 3. Auth → Email Templates: paste `supabase/templates/invite.html` and `recovery.html`
